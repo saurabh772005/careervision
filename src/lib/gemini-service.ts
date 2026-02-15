@@ -1,23 +1,74 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+const BASE_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
 
-const getAI = () => {
-  const apiKey = import.meta.env.VITE_API_KEY || '';
-  if (!apiKey) {
-    console.error("CRITICAL: API_KEY is missing. AI features will not work.");
-    throw new Error("API Key is missing. Please check your configuration.");
+if (!API_KEY) {
+  console.error("CRITICAL: API_KEY is missing. AI features will not work.");
+}
+
+interface GeminiResponse {
+  candidates?: {
+    content?: {
+      parts?: { text: string }[];
+    };
+  }[];
+  error?: {
+    code: number;
+    message: string;
+    status: string;
+  };
+}
+
+async function callGeminiAPI(prompt: string, retries = 2): Promise<string> {
+  if (!API_KEY) throw new Error("API Key is missing.");
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+
+  for (let i = 0; i <= retries; i++) {
+    try {
+      console.log(`Calling Gemini API (Attempt ${i + 1})...`);
+      const response = await fetch(`${BASE_URL}?key=${API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+
+        // Handle specific error codes
+        if (response.status === 404) {
+          throw new Error(`Model not found (404). Check API URL: ${BASE_URL}`);
+        }
+        if (response.status === 429) {
+          console.warn("Rate limit exceeded. Retrying...");
+          await new Promise(res => setTimeout(res, 2000 * (i + 1))); // Exponential backoff
+          continue;
+        }
+
+        throw new Error(`API Error ${response.status}: ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data: GeminiResponse = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) throw new Error("Empty response from Gemini API.");
+
+      return text;
+    } catch (error: any) {
+      console.error("Gemini API Request Failed:", error);
+      if (i === retries) throw error;
+    }
   }
-  const genAI = new GoogleGenerativeAI(apiKey);
-  console.log("Initialized GoogleGenerativeAI with key:", apiKey.substring(0, 5) + "...");
-  return genAI;
-};
+  throw new Error("Failed to connect to Gemini API after multiple attempts.");
+}
+
+
+// --- Exported Functions (Refactored) ---
 
 export async function generateFullCareerReportAI(profile: any) {
-  const genAI = getAI();
-  const modelName = "gemini-pro";
-  console.log("Generating Career Report with model:", modelName);
-  let model = genAI.getGenerativeModel({ model: modelName });
-
   const prompt = `
     You are an expert Career Counsellor and AI Analyst. 
     Analyze the following student profile and generate a detailed career report in Strict JSON format.
@@ -41,94 +92,80 @@ export async function generateFullCareerReportAI(profile: any) {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-
-    // Clean up if markdown is present
+    const text = await callGeminiAPI(prompt);
     const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanedText);
-  } catch (error: any) {
-    console.error("AI Report Error (Gemini Pro):", error);
+  } catch (error) {
+    console.error("AI Report Error:", error);
     throw error;
   }
 }
 
 export async function chatWithCareerMentor(history: { role: 'user' | 'model'; parts: { text: string }[] }[], message: string) {
-  const genAI = getAI();
-  const modelName = "gemini-pro";
-  console.log("Starting Chat with model:", modelName);
+  // Note: For simple REST API, we construct the prompt with history manually or just send the latest message 
+  // if we don't want to manage full multi-turn state complexity in one go. 
+  // To keep it simple and robust for this refactor, we'll append history to the prompt.
 
-  const model = genAI.getGenerativeModel({
-    model: modelName,
-    systemInstruction: `You are an empathetic, expert Career Counsellor for Indian students. 
-      Your goal is to provide personalized, actionable, and encouraging advice.
-      - Context: The user is a student exploring career options, likely from a Tier-2/3 college.
-      - Tone: Professional yet friendly, motivating, and realistic.
-      - Knowledge: deeply familiar with the Indian tech market, salaries, placement scenarios, and learning resources (DSA, Web Dev, etc.).
-      - Capabilities: You can help with study schedules, roadmap customization, resume tips, and mock interview questions.
-      - Constraint: Keep answers concise (under 200 words) unless asked for a detailed explanation. Use bullet points for clarity.`
-  });
-
-  // Helper to map roles correctly if needed (Gemini SDK uses 'user' and 'model')
-  // The history passed in is already in { role, parts } format, matching the SDK mostly.
-
-  const chat = model.startChat({
-    history: history.map(h => ({
-      role: h.role,
-      parts: h.parts
-    })),
-  });
-
-  const result = await chat.sendMessage(message);
-  const response = await result.response;
-  return response.text();
-}
-
-export async function simulateCareerPath(currentRole: string, targetRole: string) {
-  const genAI = getAI();
-  const modelName = "gemini-pro";
-  console.log("Simulating Career Path with model:", modelName);
-  const model = genAI.getGenerativeModel({ model: modelName });
+  const conversationHistory = history.map(h => `${h.role === 'user' ? 'Student' : 'Mentor'}: ${h.parts[0].text}`).join('\n');
 
   const prompt = `
-    Simulate a realistic career path transition from "${currentRole}" to "${targetRole}" in the Indian tech market.
+    You are an empathetic, expert Career Counsellor for Indian students.
+    
+    Conversation History:
+    ${conversationHistory}
+    
+    Student: ${message}
+    Mentor (You):
+  `;
+
+  return await callGeminiAPI(prompt);
+}
+
+export async function simulateCareerPath(profile: any) {
+  // Note: The previous signature was (currentRole, targetRole), but usage in component passed 'profile'.
+  // Adjusted to match component usage likely. Or I should check component usage.
+  // Wait, looking at previous file content... simulateCareerPath(currentRole, targetRole).
+  // But checking CareerSimulator.tsx... line 39: await simulateCareerPath(profile);
+  // So the component passes an object! The previous implementation had (currentRole, targetRole) signature but was called with profile? 
+  // No, let's look at CareerSimulator.tsx again.
+  // "const data = await simulateCareerPath(profile);"
+  // But definition was "export async function simulateCareerPath(currentRole: string, targetRole: string)"
+  // This implies the previous code was actually broken/mismatched types? 
+  // I will support BOTH or just the object since that's what is being passed.
+  // Let's support the object 'profile' as it contains 'branch' etc.
+
+  const prompt = `
+    Simulate a realistic career path based on this profile: ${JSON.stringify(profile)}
     
     Output strictly in this JSON format:
     {
-      "feasibilityScore": number (0-100),
-      "timeToTransition": "e.g. 6-12 months",
-      "salaryGrowth": "e.g. 40-60%",
-      "simulationSteps": [
-        { "year": "Year 1", "role": "Intermediate Role", "action": "Key skill or project to focus on" },
-        { "year": "Year 2", "role": "${targetRole}", "action": "Final preparation step" }
-      ],
-      "challenges": ["Challenge 1", "Challenge 2"]
+      "overallRecommendation": "Summary string",
+      "rankedPaths": [
+         {
+            "pathId": "career-path-1",
+            "fitScore": 85,
+            "projectedInitialSalary": 500000,
+            "year5Salary": 1200000,
+            "personalizedAdvice": "Advice string"
+         }
+      ]
     }
-    Do not include markdown formatting (like \`\`\`json). Just the raw JSON string.
+    Do not include markdown formatting.
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const text = await callGeminiAPI(prompt);
     const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanedText);
   } catch (error) {
-    console.error("Career Simulation Error:", error);
+    console.error("Simulation Error:", error);
     throw error;
   }
 }
 
 export async function validateCourseAI(course: any, userProfile: any) {
-  const genAI = getAI();
-  const modelName = "gemini-pro";
-  console.log("Validating Course with model:", modelName);
-  const model = genAI.getGenerativeModel({ model: modelName });
-
   const prompt = `
     Analyze if this course is a good fit for the student.
-
     Course: ${JSON.stringify(course)}
     Student Profile: ${JSON.stringify(userProfile)}
 
@@ -143,13 +180,11 @@ export async function validateCourseAI(course: any, userProfile: any) {
         "breakEvenMonths": number
       }
     }
-    Do not include markdown formatting (like \`\`\`json). Just the raw JSON string.
+    No markdown.
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const text = await callGeminiAPI(prompt);
     const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanedText);
   } catch (error) {
@@ -159,11 +194,6 @@ export async function validateCourseAI(course: any, userProfile: any) {
 }
 
 export async function getCareerRecommendationsAI(profile: any) {
-  const genAI = getAI();
-  const modelName = "gemini-pro";
-  console.log("Generating Recommendations with model:", modelName);
-  const model = genAI.getGenerativeModel({ model: modelName });
-
   const prompt = `
     Analyze this student profile and suggest top 3 career paths in the Indian tech market.
     Profile: ${JSON.stringify(profile)}
@@ -184,9 +214,9 @@ export async function getCareerRecommendationsAI(profile: any) {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+    const text = await callGeminiAPI(prompt);
+    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanedText);
   } catch (error) {
     console.error("Recommendation Error:", error);
     throw error;
@@ -194,11 +224,6 @@ export async function getCareerRecommendationsAI(profile: any) {
 }
 
 export async function generateRoadmapAI(role: string, skills: string, hours: number, weeks: number) {
-  const genAI = getAI();
-  const modelName = "gemini-pro";
-  console.log("Generating Roadmap with model:", modelName);
-  const model = genAI.getGenerativeModel({ model: modelName });
-
   const prompt = `
     Create a ${weeks}-week study roadmap for becoming a "${role}".
     Current Skills: ${skills}.
@@ -228,11 +253,23 @@ export async function generateRoadmapAI(role: string, skills: string, hours: num
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+    const text = await callGeminiAPI(prompt);
+    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanedText);
   } catch (error) {
     console.error("Roadmap Error:", error);
     throw error;
+  }
+}
+
+export async function validateGeminiConnection() {
+  try {
+    console.log("Validating Gemini Connection...");
+    await callGeminiAPI("Hello, are you online?");
+    console.log("Gemini Connection Validated.");
+    return true;
+  } catch (e) {
+    console.error("Gemini Connection Failed:", e);
+    return false;
   }
 }
