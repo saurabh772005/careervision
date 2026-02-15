@@ -85,7 +85,7 @@ npm install
 
 # Start development server
 npm run dev
-📊 How It Works
+##📊 How It Works
 
 User creates a profile (skills, interests, academic level).
 
