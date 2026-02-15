@@ -31,13 +31,11 @@ const CareerChatbot: React.FC = () => {
         setLoading(true);
 
         try {
-            // Filter out the initial welcome message if it causes issues with the API history format, 
-            // but Gemini usually handles it fine. We pass the history excluding the just-added user message 
-            // because startChat history handles the *previous* context.
-            // Actually, simpler to just pass the conversation history to the service if needed, 
-            // but the service initializes a *new* chat each time with history. 
-            // Optimization: Maintain a chat instance? For now, we recreate.
-            const historyForApi = messages.map(m => ({ role: m.role, parts: m.parts }));
+            // NEW: Filter out the initial welcome message (or any leading model messages)
+            // The API requires the conversation to start with a 'user' message.
+            const historyForApi = messages
+                .filter((_, index) => index > 0 || messages[0].role !== 'model')
+                .map(m => ({ role: m.role, parts: m.parts }));
 
             const responseText = await chatWithCareerMentor(historyForApi, input);
 
@@ -90,8 +88,8 @@ const CareerChatbot: React.FC = () => {
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-[80%] rounded-2xl p-4 ${msg.role === 'user'
-                                            ? 'bg-[#02C39A] text-[#0A0E27] rounded-br-none'
-                                            : 'bg-white/5 text-white rounded-bl-none border border-white/10'
+                                        ? 'bg-[#02C39A] text-[#0A0E27] rounded-br-none'
+                                        : 'bg-white/5 text-white rounded-bl-none border border-white/10'
                                         }`}>
                                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.parts[0].text}</p>
                                     </div>
