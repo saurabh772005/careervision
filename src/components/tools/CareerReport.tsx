@@ -20,11 +20,12 @@ import {
 import LoadingSpinner from '../ui/LoadingSpinner';
 import { generateFullCareerReportAI } from '../../lib/gemini-service';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
 
 const CareerReport: React.FC = () => {
    const [loading, setLoading] = useState(true);
    const [report, setReport] = useState<any>(null);
+   const [error, setError] = useState<string | null>(null);
 
    useEffect(() => {
       const fetchReport = async () => {
@@ -38,9 +39,11 @@ const CareerReport: React.FC = () => {
                goal: profile.goal || 'Maximizing Salary',
                knowledgeLevel: profile.knowledgeLevel || 'Intermediate'
             });
+            if (Object.keys(data).length === 0) throw new Error("Empty response from AI");
             setReport(data);
-         } catch (err) {
+         } catch (err: any) {
             console.error("Report Generation Error:", err);
+            setError(err.message || "Failed to generate report");
          } finally {
             setLoading(false);
          }
@@ -53,7 +56,7 @@ const CareerReport: React.FC = () => {
       if (!element) return;
 
       try {
-         const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
+         const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false } as any);
          const imgData = canvas.toDataURL('image/png');
 
          const pdf = new jsPDF('p', 'pt', [canvas.width, canvas.height]);
@@ -70,6 +73,21 @@ const CareerReport: React.FC = () => {
       return (
          <div className="flex flex-col items-center justify-center py-32 space-y-8 max-w-4xl mx-auto">
             <LoadingSpinner size="lg" text="Synthesizing Your Career DNA..." />
+         </div>
+      );
+   }
+
+   if (error) {
+      return (
+         <div className="flex flex-col items-center justify-center py-32 space-y-4 max-w-4xl mx-auto text-center px-4">
+            <div className="bg-red-500/10 p-6 rounded-full text-red-400 mb-4">
+               <AlertTriangle size={48} />
+            </div>
+            <h3 className="text-2xl font-bold text-white">Generation Failed</h3>
+            <p className="text-[#B8C5D6] max-w-md">{error}. Please check your connection or API key.</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold transition-all">
+               Retry
+            </button>
          </div>
       );
    }

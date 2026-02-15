@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-// Added Activity to the imports to fix the "Cannot find name 'Activity'" error.
-import { Map, Zap, CheckCircle, ExternalLink, Calendar, BookOpen, Video, Target, Rocket, Activity } from 'lucide-react';
+import { Map, Zap, CheckCircle, ExternalLink, Calendar, BookOpen, Video, Target, Rocket, Activity, AlertTriangle } from 'lucide-react';
 import { generateRoadmapAI } from '../../lib/gemini-service';
 import LoadingSpinner from '../ui/LoadingSpinner';
 
@@ -11,17 +10,19 @@ const RoadmapGenerator: React.FC = () => {
   const [weeks, setWeeks] = useState(8);
   const [generating, setGenerating] = useState(false);
   const [roadmap, setRoadmap] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setError(null);
     try {
       const user = JSON.parse(localStorage.getItem('career_compass_user') || '{}');
       const skills = user.skills || "JavaScript, HTML, Problem Solving";
       const data = await generateRoadmapAI(role, skills, 20, weeks);
       setRoadmap(data.roadmap);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to generate roadmap.");
+      setError(err.message || "Failed to generate roadmap.");
     } finally {
       setGenerating(false);
     }
@@ -33,6 +34,16 @@ const RoadmapGenerator: React.FC = () => {
         <h2 className="text-4xl font-black mb-4">AI Roadmap Generator</h2>
         <p className="text-[#6B7A8F]">What's your dream career goal? We'll map the exact week-by-week route.</p>
       </div>
+
+      {error && (
+        <div className="flex flex-col items-center justify-center py-10 space-y-4 max-w-2xl mx-auto text-center px-4 mb-10">
+          <div className="bg-red-500/10 p-4 rounded-full text-red-400">
+            <AlertTriangle size={36} />
+          </div>
+          <h3 className="text-xl font-bold text-white">Roadmap Generation Failed</h3>
+          <p className="text-[#B8C5D6]">{error}. Please try again.</p>
+        </div>
+      )}
 
       {!roadmap ? (
         <div className="bg-[#1A1F3A]/60 backdrop-blur-xl border border-white/10 p-12 rounded-[40px] shadow-2xl relative overflow-hidden">

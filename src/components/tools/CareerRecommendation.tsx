@@ -13,7 +13,8 @@ import {
   BookOpen,
   Zap,
   ArrowLeft,
-  Rocket
+  Rocket,
+  AlertTriangle
 } from 'lucide-react';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import { getCareerRecommendationsAI, generateRoadmapAI } from '../../lib/gemini-service';
@@ -21,6 +22,7 @@ import { getCareerRecommendationsAI, generateRoadmapAI } from '../../lib/gemini-
 const CareerRecommendation: React.FC = () => {
   const [step, setStep] = useState<'form' | 'options' | 'roadmap'>('form');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState({
     collegeType: 'tier3',
     cgpa: 7.5,
@@ -34,13 +36,14 @@ const CareerRecommendation: React.FC = () => {
 
   const handleGetRecommendations = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await getCareerRecommendationsAI(profile);
       setRecommendations(data);
       setStep('options');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to get recommendations.");
+      setError(err.message || "Failed to get recommendations.");
     } finally {
       setLoading(false);
     }
@@ -49,14 +52,15 @@ const CareerRecommendation: React.FC = () => {
   const handleSelectCareer = async (career: any) => {
     setSelectedCareer(career);
     setLoading(true);
+    setError(null);
     try {
       // Reusing roadmap generator logic
       const data = await generateRoadmapAI(career.title, profile.interests + ", " + profile.strengths, 20, 12);
       setRoadmap(data.roadmap);
       setStep('roadmap');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to generate roadmap.");
+      setError(err.message || "Failed to generate roadmap.");
     } finally {
       setLoading(false);
     }
@@ -66,6 +70,21 @@ const CareerRecommendation: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-32 space-y-8">
         <LoadingSpinner size="lg" text={step === 'form' ? "Analyzing your unique profile DNA..." : "Mapping out your path to success..."} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 space-y-4 max-w-4xl mx-auto text-center px-4">
+        <div className="bg-red-500/10 p-6 rounded-full text-red-400 mb-4">
+          <AlertTriangle size={48} />
+        </div>
+        <h3 className="text-2xl font-bold text-white">Oops! Something went wrong.</h3>
+        <p className="text-[#B8C5D6] max-w-md">{error} Please check your connection or API key.</p>
+        <button onClick={() => { setError(null); setStep('form'); }} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold transition-all">
+          Try Again
+        </button>
       </div>
     );
   }
