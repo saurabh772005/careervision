@@ -96,11 +96,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onToolClick }) => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
           {/* Left Column: Quick Actions */}
-          <div className="lg:col-span-8 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-9 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 { id: 'recommendation', title: 'Finder', desc: 'AI Recommend', icon: Compass, color: 'text-gold-400' },
                 { id: 'simulator', title: 'Simulator', desc: 'Predict ROI', icon: BrainCircuit, color: 'text-teal-400' },
+                { id: 'validator', title: 'Validator', desc: 'Verify Courses', icon: ShieldCheck, color: 'text-emerald-400' },
+                { id: 'roadmap', title: 'Roadmap', desc: 'Step-by-step', icon: Map, color: 'text-blue-400' },
                 { id: 'mentorship', title: 'Mentors', desc: 'Connect', icon: Users, color: 'text-purple-400' },
                 { id: 'resources', title: 'Library', desc: 'Free Content', icon: Book, color: 'text-indigo-400' },
               ].map((tool) => (
@@ -165,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onToolClick }) => {
           </div>
 
           {/* Right Column: Activity & Mentors */}
-          <div className="lg:col-span-4 space-y-8">
+          <div className="lg:col-span-3 space-y-8">
             <GlassCard className="h-full">
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-xl font-bold">Live Activity</h3>
